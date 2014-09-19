@@ -35,9 +35,9 @@ module.exports = (robot) ->
         net += "Diff: #{json.data.current.difficulty} - "
         net += "Target: #{target} - "
         net += "Hashrate: #{hl} #{hm} #{hs} MH/s - "
-        net += "Change: #{change} - "
-        net += "Performance: #{performance}% - " if change < 660
-        net += "Next Diff: ~#{nextdiff} (confidence #{confidence}%)" if change < 660
+        net += "Change: #{change}"
+        net += " - Performance: #{performance}% - " if change < 660 # Only revealed after 60 blocks since last retarget
+        net += "Next Diff: ~#{nextdiff} (confidence #{confidence}%)" if change < 660  # Only revealed after 60 blocks since last retarget
         msg.send net
         
   robot.hear /^(address) b([\w\S]+)$/i, (msg) ->
