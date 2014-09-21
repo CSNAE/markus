@@ -4,7 +4,7 @@
 # Commands:
 #   network|net - show network details
 #   supply - show currency supply details
-#   poloniex|polo - show poloniex exchange details
+#   market(s) - show exchange details
 #   address <address> - get btm address info
 
 module.exports = (robot) ->
@@ -12,9 +12,9 @@ module.exports = (robot) ->
     robot.http("http://bitmark.co/statistics/data/livesummary.json")
       .get() (err, res, body) ->
         json = JSON.parse(body)
-        hl = Math.round(json.data.hashrate_l/1000000) + ""
-        hm = Math.round(json.data.hashrate_m/1000000) + ""
-        hs = Math.round(json.data.hashrate_s/1000000) + ""
+        hl = (json.data.hashrate_l/1000000000).toFixed(2) + ""
+        hm = (json.data.hashrate_m/1000000000).toFixed(2) + ""
+        hs = (json.data.hashrate_s/1000000000).toFixed(2) + ""
         change = (Math.ceil(json.generated/720)*720)-json.generated
         timesincelastretarget = json.data.current.time-json.data.lastchange.time
         avblocktime = (timesincelastretarget)/(720-change)
@@ -30,15 +30,23 @@ module.exports = (robot) ->
           confidence = 100
         else
           confidence = Math.floor(((720-change)/720)*100)
-        timetoretarget = Math.ceil(performance/100*change*2)
-        target = Math.floor(((json.data.current.difficulty*4294967296)/120)/1000000) + " MH/s"
-        net = "Block: http://bitmark.co:3000/block/#{json.data.current.hash}|#{json.generated} - "
-        net += "Diff: #{json.data.current.difficulty} - "
-        net += "Target: #{target} - "
-        net += "Hashrate: #{hl} #{hm} #{hs} MH/s - "
-        net += "Change: #{change} (Approx #{timetoretarget} min) - "
-        net += "Performance: #{performance}% - " if change < 660
-        net += "Next Diff: ~#{nextdiff} (confidence #{confidence}%)" if change < 660
+        mintotarget = Math.ceil(change*2/(performance/100))
+        hourtoretarget = (mintotarget/60).toFixed(2)
+        timetoretarget =  "" + hourtoretarget + " hrs"
+        timetoretarget =  "" + mintotarget + " mins" if change < 120
+        target = (((json.data.current.difficulty*4294967296)/120)/1000000000).toFixed(2) + " GH/s"
+        timesincelastretargethrs = (timesincelastretarget/3600).toFixed(2)
+        elapsedretargettime = "" + timesincelastretargethrs + " hrs"
+        elapsedretargettime =  "" + (timesincelastretargethrs*60) + " mins" if timesincelastretargethrs < 2
+        net = "Block: http://bitmark.co:3000/block/#{json.data.current.hash}|#{json.generated},"
+        net += "Target: #{target}, "
+        net += "Hashrate: #{hl}, #{hm}, #{hs} GH/s"
+        net += ", Performance: #{performance}%" if change < 660
+        net += "\n"
+        net += "Diff: #{json.data.current.difficulty}"
+        net += ", next: ~#{nextdiff} (confidence #{confidence}%)" if change < 660
+        net += " - Last Retarget: #{elapsedretargettime} ago, "
+        net += "change in #{change} blocks (~#{timetoretarget}) "
         msg.send net
         
   robot.hear /^(address) b([\w\S]+)$/i, (msg) ->
@@ -59,17 +67,29 @@ module.exports = (robot) ->
         net += "there is #{diff} less BTM in the world"
         msg.send net
         
-  robot.hear /^(poloniex|polo)$/i, (msg) ->
+  robot.hear /^(market|markets|polo)$/i, (msg) ->
     robot.http("https://poloniex.com/public?command=returnTicker")
       .get() (err, res, body) ->
         json = JSON.parse(body)
         btm = json.BTC_BTM
         pc = Math.round(btm.percentChange * 100, 2)
-        price = "Last: #{btm.last} - "
-        price += "Change: #{pc}% - "
+        price = "*POLO*: Last: #{btm.last} - "
         price += "Volume: #{btm.baseVolume} BTC / #{btm.quoteVolume} BTM - "
         vwa = (btm.baseVolume/btm.quoteVolume).toFixed(8)
         price += "VWAP: #{vwa}"
+        spread = (btm.lowestAsk - btm.highestBid).toFixed(8)
+        price += " - Spread: #{spread}\n"
+        msg.send price
+    robot.http("https://bittrex.com/api/v1.1/public/getmarketsummary?market=btc-btm")
+      .get() (err, res, body) ->
+        json = JSON.parse(body)
+        btm = json.result[0]
+        price = "*BITT*: Last: #{btm.Last} - "
+        price += "Volume: #{btm.BaseVolume} BTC / #{btm.Volume} BTM - "
+        vwa = (btm.BaseVolume/btm.Volume).toFixed(8)
+        price += "VWAP: #{vwa}"
+        spread = (btm.Ask - btm.Bid).toFixed(8)
+        price += " - Spread: #{spread}\n"
         msg.send price
 
 checkAddress = (msg, address) ->
